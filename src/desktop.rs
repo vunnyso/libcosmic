@@ -263,14 +263,29 @@ pub async fn spawn_desktop_exec<S, I, K, V>(
     // https://systemd.io/DESKTOP_ENVIRONMENTS
     //
     // Similar to what Gnome sets, for now.
+    println!(
+        "[Vunny] Executing: {} {}",
+        cmd.get_program().to_string_lossy(),
+        cmd.get_args()
+            .map(|a| a.to_string_lossy())
+            .collect::<Vec<_>>()
+            .join(" ")
+    );
     if let Some(pid) = crate::process::spawn(cmd).await {
-        #[cfg(feature = "desktop-systemd-scope")]
+      //  #[cfg(feature = "desktop-systemd-scope")]
         if let Ok(session) = zbus::Connection::session().await {
             if let Ok(systemd_manager) = SystemdMangerProxy::new(&session).await {
-                let _ = systemd_manager
-                    .start_transient_unit(
-                        &format!("app-cosmic-{}-{}.scope", app_id.unwrap_or(&executable), pid),
-                        "fail",
+                        let unit_name = &format!(
+                            "app-cosmic-{}-{}.scope",
+                            app_id.unwrap_or(&executable),
+                            pid
+                        );
+                        println!("[DEBUG] Starting transient unit: {}", unit_name);
+
+                        let result = systemd_manager
+                            .start_transient_unit(
+                                &unit_name,
+                                "fail",
                         &[
                             (
                                 "Description".to_string(),
@@ -294,6 +309,13 @@ pub async fn spawn_desktop_exec<S, I, K, V>(
                         &[],
                     )
                     .await;
+                   match result {
+                    Ok(_) => println!("[DEBUG] Transient unit started successfully"),
+                    Err(e) => eprintln!(
+                        "[ERROR] Failed to start transient unit: {:?}",
+                        e
+                    ),
+                }
             }
         }
     }
